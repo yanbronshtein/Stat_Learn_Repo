@@ -1,0 +1,401 @@
+---
+title: "Statistical Learning HW2"
+author: "Yaniv Bronshtein"
+date: "10/31/2021"
+output: pdf_document
+---
+**Import necessary libraries**
+```{r}
+library(plotrix)
+library(ISLR)
+library(e1071)
+library(dslabs)
+library(glmnet)
+library(Matrix)
+```
+# Question 1
+```{r}
+plot(0,type="n",xlab='X1', ylab='X2',
+     ylim = c(-10,10),xlim = c(-5,5),main="ISL Chap 9 Question 1")
+abline(1,3,lty=1) #Line (a): 1+3X1-X2=0 (solid)
+abline(1,-0.5, lty=6) #Line (b): -2+X1+2X2=0 (dashed)
+# Points where Line(a)>0 and Line(a)<0
+points(-2,-4,pch=5) #Points where line a > 0. diamond
+points(-2,-6,pch=6) #Points where line a < 0. triangle.
+# Points where Line(b)>0 and Line(b)<0
+points(2,1,pch=6) #Points where line b > 0. triangle
+points(2,-1,pch=5) #Points where line b < 0. diamond
+legend(3,6,legend=c("Point > 0", "Point < 0", "line a", "line b"),
+       pch=c(6,5,NA,NA),lty=c(NA,NA,1,6))
+
+```
+
+# Question 2
+
+**Here we have a circle that follows the equation::**
+**(x – h)^2+ (y – k)2 = r^2 where the center is (h,k)**
+**In our case (h,k)=(-1,2) and r=2**
+**Below is the solution for (a) and (b)**
+```{r}
+plot(x=-3:2,y=0:5,type="n",asp=1, xlab='X1', ylab='X2', main="ISL Chap 9 Question 2 a,b")
+draw.circle(x=-1,y=2,radius=2)
+points(-1,2, pch=4)
+# Points outside decision boundary
+points(c(-4,2,-3),c(1,1,3),pch=5)
+#Points inside decision boundary
+points(c(-1,-2,0),c(1,3,2.5),pch=6)
+legend(x=2, y=3,   # Coordinates (x also accepts keywords)
+       c('Blue(Outside)','Red(Inside)','Center'), # Vector with the name of each group
+       pch=c(5,6,4)           
+)
+```
+
+(c).
+
+*(0,0) is classified as belonging to the blue class.*
+*(-1,1) is classified as belonging to the red class.*
+*(2,2) is classified as belonging to the blue class.*
+*(3,8) is classified as belonging to the blue class.*
+
+
+# Question 3
+```{r}
+plot(-1:5,-1:5,type="n",xlab='X1', ylab='X2', main="ISL Chap 9 Question 3a,d,e,f,g,h")
+points(c(3,2,4,1),c(4,2,4,2), pch=6)
+points(c(2,4,4),c(1,3,1),pch=5)
+points(2,3,pch=17)
+abline(-0.5,1,lwd=5) #y intercept=-0.5 and gradient=1.
+abline(-1, 1, lty='dotted')
+abline(0, 1, lty='dotted')
+abline(0,0.8, lwd=2)
+text(2,3.3,'(h)')
+legend(3.2,0.5,
+       legend=c("Optimal hyperplane", "Margin", "Non-optimal hyperplane"),
+       lty=c(1,3,1), 
+       lwd=c(5,1,2))
+```
+
+# Question 4 
+(ISL Chap 9 Question 8)
+(a) Create a training set containing a random sample of 800 observations, and a test set containing the remaining observations.
+```{r}
+data(OJ)
+set.seed(1)
+train <- sample(nrow(OJ),size = 800)
+test <- -train
+oj_train <- OJ[train, ]
+oj_test <- OJ[test, ]
+```
+
+(b) Fit a support vector classifier to the training data using cost=0.01, 
+with Purchase as the response and the other variables as predictors. 
+Use the summary() function to produce summary statistics, and describe the 
+results obtained.
+
+```{r}
+svm_fit <- svm(Purchase~ .,kernel="linear", data =oj_train, cost=0.01)
+```
+**Let's get the summary**
+```{r}
+summ_svm_fit <- summary(svm_fit)
+summ_svm_fit
+```
+
+*The linear support vector classifier creates a classification out of 435 support vectors*
+*from 800 observations*
+*with 219 classified as CH and 216 classified as MM*
+
+(c) What are the training and test error rates?
+
+```{r}
+#Get the predictions
+train_pred <- predict(svm_fit, oj_train)
+test_pred <- predict(svm_fit, oj_test)
+
+#Create the confusion matrices
+table1 <- table(oj_train$Purchase, train_pred)
+table2 <- table(oj_test$Purchase, test_pred)
+table1
+cat('*****************','\n')
+table2
+get_err_rate <- function(my_table){
+  return((my_table[2,1] + my_table[1,2])/sum(my_table))
+}
+
+train_err = get_err_rate(table1)
+test_err = get_err_rate(table2)
+cat('*****************','\n')
+cat("Train Error:", train_err,'\n')
+cat("Test Error:", test_err,'\n')
+
+```
+
+(d) Use the tune() function to select an optimal cost. Consider values in the range 0.01 to 10.
+
+```{r}
+set.seed(2)
+tune_out <- tune(svm,Purchase ~ ., data=oj_train, kernel="linear", ranges=list(cost=10^seq(-2,1,by=0.25)))
+summ_tune <- summary(tune_out)
+```
+
+**Let us see the best parameter cost and best performance**
+```{r}
+cat("Best parameter cost:\n")
+best_cost <- summ_tune$best.parameters$cost
+best_cost
+cat("Best performance:\n")
+best_performance <- summ_tune$best.performance
+best_performance
+```
+
+(e) Compute the training and test error rates using this new value
+for cost.
+```{r}
+svm_fit_best <- svm(Purchase~ .,kernel="linear", data =oj_train, cost=best_cost)
+#Get the predictions
+train_pred_best <- predict(svm_fit, oj_train)
+test_pred_best <- predict(svm_fit, oj_test)
+
+#Create the confusion matrices
+table1_best <- table(oj_train$Purchase, train_pred_best)
+table2_best <- table(oj_test$Purchase, test_pred_best)
+table1_best
+cat('*****************','\n')
+table2_best
+train_err_best = get_err_rate(table1_best)
+test_err_best = get_err_rate(table2_best)
+cat('*****************','\n')
+cat("Train Error Best:", train_err_best,'\n')
+cat("Test Error Best:", test_err_best,'\n')
+```
+(f) Repeat parts (b) through (e) using a support vector machine
+with a radial kernel. Use the default value for gamma.
+```{r}
+svm_fit_radial <- svm(Purchase~ .,kernel="radial", data =oj_train)
+svm_radial_summ <- summary(svm_fit_radial)
+svm_radial_summ
+#Get the predictions
+train_pred_radial <- predict(svm_fit_radial, oj_train)
+test_pred_radial <- predict(svm_fit_radial, oj_test)
+
+#Create the confusion matrices
+table1_radial <- table(oj_train$Purchase, train_pred_radial)
+table2_radial <- table(oj_test$Purchase, test_pred_radial)
+table1_radial
+cat('*****************','\n')
+table2_radial
+train_err_radial = get_err_rate(table1_radial)
+test_err_radial = get_err_rate(table2_radial)
+cat('*****************','\n')
+cat("Train Error Radial SVM:", train_err_radial,'\n')
+cat("Test Error Radial SVM:", test_err_radial,'\n')
+```
+
+
+(g) Repeat parts (b) through (e) using a support vector machine
+with a polynomial kernel. Set degree=2.
+
+```{r}
+svm_fit_poly <- svm(Purchase~ .,kernel="polynomial",degree=2, data=oj_train)
+svm_poly_summ <- summary(svm_fit_poly)
+svm_poly_summ
+#Get the predictions
+train_pred_poly <- predict(svm_fit_poly, oj_train)
+test_pred_poly <- predict(svm_fit_poly, oj_test)
+
+#Create the confusion matrices
+table1_poly <- table(oj_train$Purchase, train_pred_poly)
+table2_poly <- table(oj_test$Purchase, test_pred_poly)
+table1_poly
+cat('*****************','\n')
+table2_poly
+train_err_poly = get_err_rate(table1_poly)
+test_err_poly = get_err_rate(table2_poly)
+cat('*****************','\n')
+cat("Train Error Polynomial, Degree 2 SVM:", train_err_poly,'\n')
+cat("Test Error Polynomial, Degree 2 SVM:", test_err_poly,'\n')
+
+```
+
+(h) Overall, which approach seems to give the best results on this data?
+*It seems like radial kernel gives the best result*
+
+
+# Question 5
+```{r}
+mnist <- read_mnist()
+```
+
+
+
+**Now create the training and test set for this problem as follows, each of size 800**
+```{r}
+# Select the first 400 images of “3” in mnist$test$images, and the first 400 images 
+# of “5” in mnist$test$images, as the training set. 
+# Create the corresponding label vector, which has length 800.
+
+all_labels <- mnist$test$labels
+all_images <- mnist$train$images
+
+#select images for testing and training
+train_images_3 <- mnist$test$images[all_labels ==3,][1:400,]
+train_images_5 <- mnist$test$images[all_labels ==5,][1:400,]
+test_images_3 <- mnist$test$images[all_labels ==3,][401:800,]
+test_images_5 <- mnist$test$images[all_labels ==5,][401:800,]
+
+#The labels_vec is used for both train_df and test_df
+labels_vec <- rep(c('3','5'),each=400)
+train_images <- rbind(train_images_3,train_images_5)
+test_images <- rbind(test_images_3,test_images_5)
+
+#Create the dataframes for train and test data
+df_train <- data.frame(
+  labels=labels_vec,
+  images=train_images
+  )
+df_test <- data.frame(
+  labels=labels_vec,
+  images=test_images
+  )
+```
+
+
+
+
+(a) Perform logistic regression on the training set, and use it to predict the labels of the test set. Report the training and testing mis-classification rates.
+```{r}
+lr_fit <- glm(formula=as.factor(labels) ~ .,family=binomial(link=logit),data=df_train)
+
+```
+**Repeat function to get error rate**
+```{r}
+get_err_rate <- function(my_table){
+  return((my_table[2,1] + my_table[1,2])/sum(my_table))
+}
+
+```
+
+**Let's predict**
+```{r}
+#Get the logistic regression probabilities
+lr_prob_train <- predict(lr_fit, df_train, type='response')
+lr_prob_test <- predict(lr_fit, df_test, type='response')
+#Get the classification by checking the value relative to the threshold
+lr_pred_train<- rep('3', 800)
+lr_pred_test<- rep('3', 800)
+lr_pred_train[lr_prob_train > .5] <- '5'
+lr_pred_test[lr_prob_test > .5] <- '5'
+
+train_table_lr <- table(df_train$labels, lr_pred_train)
+test_table_lr <- table(df_test$labels, lr_pred_test)
+train_err_lr = get_err_rate(train_table_lr)
+test_err_lr = get_err_rate(test_table_lr)
+cat("train_err_lr",train_err_lr)
+cat("\ntest_err_lr",test_err_lr) 
+```
+(b) For the logistic regression, the size of the training set is N = 800, and the number of features is
+p = 784, which is almost the same as N. Now try to run the logistic regression using the glmnet()
+function in the glmnet package. This function adds a Lasso type penalty to the logistic regression.
+Use the tuning parameter lambda=.1 and family="binomial" in the glmnet() function (you don’t
+need to specify any other parameters). Report the training and testing mis-classification rates.
+
+```{r}
+glmnet_lr <- glmnet(x=df_train[,-1], y=df_train[,1], family='binomial', lambda=.1)
+```
+
+**Let's get predictions and misclassification rates for glmnet()**
+```{r}
+#Get the logistic regression probabilities
+glmnet_lr_prob_train <- predict(glmnet_lr, as.matrix(df_train[,-1]), type='response')
+glmnet_lr_prob_test <- predict(glmnet_lr, as.matrix(df_test[,-1]), type='response')
+#Get the classification by checking the value relative to the threshold
+glmnet_lr_pred_train<- rep('3', 800)
+glmnet_lr_pred_test<- rep('3', 800)
+glmnet_lr_pred_train[glmnet_lr_prob_train > .5] <- '5'
+glmnet_lr_pred_test[glmnet_lr_prob_test > .5] <- '5'
+
+train_table_glmnet_lr <- table(df_train$labels, glmnet_lr_pred_train)
+test_table_glmnet_lr <- table(df_test$labels, glmnet_lr_pred_test)
+train_err_glmnet_lr = get_err_rate(train_table_glmnet_lr)
+test_err_glmnet_lr = get_err_rate(test_table_glmnet_lr)
+
+cat("train_err_glmnet_lr",train_err_glmnet_lr)
+cat("\ntest_err_glmnet_lr",test_err_glmnet_lr) 
+```
+
+(c) Try some other values of lambda, and report the smallest testing mis-classification rate you obtain,
+with the corresponding value of lambda.
+```{r}
+test_ms_rates <- NULL
+my_range <- 10^seq(-4,-1,by=0.2)
+for(i in my_range){
+  model <- glmnet(x=df_train[,-1], y=df_train[,1], family='binomial', lambda=i)
+	model_prob_test <- predict(model, as.matrix(df_test[,-1]), type='response')
+  model_pred_test<- rep('3', 800)
+
+	model_pred_test[model_prob_test > .5] <- '5'
+  test_table_model <- table(df_test$labels, model_pred_test)
+	test_err_model = get_err_rate(test_table_model)
+	test_ms_rates <- c(test_ms_rates,test_err_model)
+
+	}
+```
+
+**Get the minimum test misclassification rate
+```{r}
+idx <- which.min(test_ms_rates)
+
+cat("Minimum test mis-classification rate:",min(test_ms_rates), "with lambda:", my_range[idx])
+```
+
+(d) Build a support vector classifier using the training set, and use it to predict the labels of the test
+set. Report the training and testing mis-classification rates. [Hint. You can use cost=1, and add
+scale=FALSE in the svm() function.]
+
+**Build an svm model**
+```{r}
+set.seed(1)
+svm_model <- svm(as.factor(labels)~ .,kernel="linear", 
+               data =df_train, cost=1, scale=FALSE)
+
+
+```
+
+**Get the training and testing mis-classification rates**
+```{r}
+train_pred_svm_model <- predict(svm_model, df_train)
+test_pred_svm_model <- predict(svm_model, df_test)
+
+svm_model_table1 <- table(df_train$labels, train_pred_svm_model)
+svm_model_table2 <- table(df_test$labels, test_pred_svm_model)
+svm_model_train_err <- get_err_rate(svm_model_table1)
+svm_model_test_err <- get_err_rate(svm_model_table2)
+cat("Train Misclassification rate:",svm_model_train_err, 
+    "Test Misclassification rate:",svm_model_test_err )
+
+```
+
+(e) From now on only use the 400 images of “3” in the training set. 
+Plot the average image of them.
+```{r}
+avg_image <- apply(df_train[1:400,-1], 2, mean)
+avg_image
+image(1:28,
+      1:28,
+      matrix(as.numeric(avg_image), nrow=28)[ , 28:1],
+      col = gray(seq(0, 1, 0.05)), xlab = "", ylab="")
+
+```
+(f) Perform the PCA, and plot the images given by the first three principal directions. [Hint. You can
+use svd() as I did in the lecture, but you need to center the data first by yourself. Or you can use
+the function prcomp(), which does the centering automatically. See the book ISL for more details
+on the function prcomp().]
+
+```{r}
+pr_out <- prcomp(matrix(as.numeric(avg_image), nrow=28)[,1:28])
+transp <- t(pr_out$rotation[,1:3])
+recon <- pr_out$x[,1:3] %*% transp
+c <- -(pr_out$center)
+recon <- scale(recon, center = c, scale=FALSE)
+image(1:28, 1:28, matrix(recon, nrow=28)[,28:1], col=gray(seq(0,1,0.05)), xlab="", ylab="")
+```

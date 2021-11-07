@@ -1,0 +1,102 @@
+---
+title: "Statistical Learning HW1 Applied"
+author: "Yaniv Bronshtein"
+date: "10/16/2021"
+output: pdf_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+(a). *Analysis of Primal Problem*
+Give the feasible set, the optimal value, and the optimal solution
+
+*Feasible Set: The interval [2,4]*
+$(x-2)(x-4)\le0$
+$x-2\le0$ and $x-4\le0$
+$x\le2$ and $x\le4$
+Thus, the optimal point is x*=2
+The optimal value is $2^2+1=5$
+
+
+(b). *Lagrangian and dual Function*
+Plot the objective $x^2+1$ versus x. On the same plot, show the feasible set, optimal optimal point and value, and plot the Lagrangian $L(x,\lambda)$ versus
+x for a few positive values of $\lambda$. Verify the lower bound property $p* \ge inf L(x,\lambda)$ for $\lambda\ge0$. 
+Derive and sketch the Lagrange dual function g.
+```{r}
+
+
+x <- seq(-5,5, 0.1)
+f0 <- x^2+1
+f1 <- (x-2)*(x-4) 
+par(mfrow=c(1,2))
+plot(
+  x=x, 
+  y=f0,
+  main="f0 and f1",
+  ylab="",
+  xlab="x",
+  type="l",
+  ylim = c(-5,25),
+  col="blue"
+)
+lines(x=x, y=f1, col="magenta")
+legend(
+  "topleft",
+  c("f0=x^2+1","f1=(x-2)(x-4)"),
+  fill=c("blue","magenta")
+)
+
+abline(v=2, col='red')
+abline(v=4, col='red')
+abline(h=0, col='black')
+```
+
+
+```{r}
+plot(x=x, 
+     y=f0,
+     ylab="",
+     xlab="x",
+     type="l",
+     ylim = c(-5,25),
+     col="brown",
+     main="The lagrangian for various values of lambda"
+)
+lines(x,f0+1.0*f1, col="green")
+lines(x,f0+2.0*f1, col="purple")
+lines(x,f0+3.0*f1, col="orange")
+
+legend(
+  "topleft",
+  c("f0+0.0*f1","f0+1.0*f1", "f0+2.0*f1", "f0+3.0*f1"),
+  fill=c("brown","green", "purple", "orange")
+)
+
+abline(v=2, col='red')
+abline(v=4, col='red')
+
+```
+The overlayed plot above demonstrates the Lagrangian with input x and $\lambda$ as
+the sum of f_0 and f_1 times a constant $\lambda$
+The minimum value of the Lagrangian is always less than p*.
+The maximum is reached at a $\lambda$ value of 2 and decreases after that.
+
+```{r}
+
+
+lambda <- seq(-0.9,16/3,0.1); 
+g <- (-9*lambda^2)/(1+lambda) + 1 + 8*lambda
+plot(x=lambda, 
+     y=g, 
+     ylab="g(lambda)", 
+     xlab="lambda", 
+     type="l", 
+     xlim=c(-2,4), 
+     ylim=c(-10,6)
+)
+abline(v=-1, lty='dashed')
+
+
+```
