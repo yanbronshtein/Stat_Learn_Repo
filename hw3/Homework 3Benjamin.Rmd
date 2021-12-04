@@ -1,0 +1,169 @@
+---
+title: "Homework 3"
+author: "Benjamin Barnett"
+date: "11/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gRbase); library(gRain); library(gRim)
+library(ggm); library(bnlearn); library(glasso)
+```
+
+
+```{r, echo=FALSE}
+is.acyclic <- function(A){
+  if (nrow(A) == 1)
+    return(TRUE)
+  H <- A
+  diag(H) <- 1
+  repeat {
+    HH <- sign(H %*% H)
+    if (all(HH == H)) 
+      break
+    else H <- HH
+  }
+  diag(H) <- 0
+  l <- H[lower.tri(H)]
+  u <- t(H)[lower.tri(t(H))]
+  com <- (l & u)
+  all(!com)
+}
+```
+
+
+
+```{r}
+gene <- read.table('C:\\Users\\benja\\Downloads\\gene.txt', header=TRUE)
+data <- gene[,c(3,6,4,1)]
+```
+
+Creating all directed graphs.
+
+```{r}
+A <- matrix(c(0,0,0,0,
+              0,0,0,0,
+              0,0,0,0,
+              0,0,0,0),nrow=4,byrow=TRUE)
+
+all <- expand.grid(rep(list(c('A','B','C')), 6))
+res <- vector("list", length = nrow(all))
+
+for (i in (1:nrow(all))){
+  A <- matrix(c(0,0,0,0,
+		0,0,0,0,
+		0,0,0,0,
+		0,0,0,0),nrow=4,byrow=TRUE)
+
+  A[1,2] <- +(all$Var1[i] == 'B')
+  A[2,1] <- +(all$Var1[i] == 'C')
+  A[1,3] <- +(all$Var2[i] == 'B')
+  A[3,1] <- +(all$Var2[i] == 'C')
+  A[1,4] <- +(all$Var3[i] == 'B')
+  A[4,1] <- +(all$Var3[i] == 'C')
+  A[2,3] <- +(all$Var4[i] == 'B')
+  A[3,2] <- +(all$Var4[i] == 'C')
+  A[2,4] <- +(all$Var5[i] == 'B')
+  A[4,2] <- +(all$Var5[i] == 'C')
+  A[3,4] <- +(all$Var6[i] == 'B')
+  A[4,3] <- +(all$Var6[i] == 'C')
+
+  rownames(A) <- c('GAL1','GAL2','GAL3','GAL7')
+  colnames(A) <- c('GAL1','GAL2','GAL3','GAL7')
+
+  res[[i]] <- A
+}
+```
+
+Extracting only directed acyclic graphs.
+
+```{r}
+str <- list(); count <- 0
+
+for (i in seq(length(res))){
+  if (is.acyclic(res[[i]]) == TRUE){
+
+     count <- count + 1
+     str[[count]] <- res[[i]]
+     }
+  }
+```
+
+Extracting BIC scores and sorting them.
+
+```{r}
+dag <- empty.graph(names(data))
+
+BIC_score <- NULL
+for (i in seq(length(str))){
+  amat(dag) <- str[[i]]
+  BIC_score <- c(BIC_score, score(dag, data))
+}
+
+sorted_BICs <- data.frame(cbind(BIC_score, Graph = seq(length(str))))
+sorted_BICs <- sorted_BICs[order(sorted_BICs[,1]),]
+
+head(sorted_BICs)
+```
+
+
+
+```{r}
+amat(dag) <- str[[sorted_BICs[1,2]]]
+plot(dag); paste('BIC:', sorted_BICs[1,1])
+
+amat(dag) <- str[[sorted_BICs[2,2]]]
+plot(dag); paste('BIC:', sorted_BICs[2,1])
+
+amat(dag) <- str[[sorted_BICs[3,2]]]
+plot(dag); paste('BIC:', sorted_BICs[3,1])
+
+amat(dag) <- str[[sorted_BICs[4,2]]]
+plot(dag); paste('BIC:', sorted_BICs[4,1])
+```
+
+
+
+```{r}
+fit1 <- glasso(cov(gene),rho=.05)
+theta <- fit1$wi
+
+colnames(theta) <- names(gene)
+rownames(theta) <- names(gene)
+
+adj = theta != 0; adj = adj*1
+diag(adj)=0; g1=as(adj, "graphNEL")
+
+plot(g1); paste('Rho:', .05)
+```
+
+
+
+```{r}
+fit2 <- glasso(cov(gene),rho=.1)
+theta <- fit2$wi
+
+colnames(theta) <- names(gene)
+rownames(theta) <- names(gene)
+
+adj = theta != 0; adj = adj*1
+diag(adj)=0; g2=as(adj, "graphNEL")
+
+plot(g2); paste('Rho:', .1)
+```
+
+
+
+```{r}
+fit3 <- glasso(cov(gene),rho=.5)
+theta <- fit3$wi
+
+colnames(theta) <- names(gene)
+rownames(theta) <- names(gene)
+
+adj = theta != 0; adj = adj*1
+diag(adj)=0; g2=as(adj, "graphNEL")
+
+plot(g2); paste('Rho:', .5)
+```

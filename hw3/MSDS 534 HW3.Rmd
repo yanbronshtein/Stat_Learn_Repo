@@ -1,0 +1,552 @@
+---
+title: "MSDS 534 HW3"
+author: "Hema Chandra Yedoti"
+date: "10/29/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE}
+rm(list = ls())
+```
+
+```{r}
+is.acyclic <- function(A){
+  ## A is an adjacency matrix
+  ## i.e. a_ij = 1 if the edge i->j *is* in the graph
+  ##      a_ij = 0 if the edge i->j *is not* in the graph
+  if (nrow(A) == 1)
+    return(TRUE)
+  ## compute transitive closure
+  H <- A
+  diag(H) <- 1
+  repeat {
+    HH <- sign(H %*% H)
+    if (all(HH == H)) 
+      break
+    else H <- HH
+  }
+  diag(H) <- 0
+  ## h_ij =1 if there is a directed path from i to j
+  l <- H[lower.tri(H)]
+  u <- t(H)[lower.tri(t(H))]
+  com <- (l & u)
+  all(!com)
+}
+
+
+```
+
+```{r, echo = FALSE, warning = FALSE, include = FALSE}
+library("gRbase")
+library("gRain")
+library("gRim")
+library("Rgraphviz")
+library("glasso")
+```
+
+# 2)
+
+```{r, echo = FALSE}
+# Storing the gene.txt file as a data frame:
+
+gene <- read.table('../data/gene.txt', header = TRUE)
+#df_subset <- df[,c(3,6,4,1)]
+#gene = read.table('../data/gene.txt', head = TRUE)
+```
+
+### a) 
+```{r, echo = FALSE}
+# Creating an empty 4x4 adjacency matrix to represent the DAGs on genes GAL1, GAL2, GAL3, GAL7:
+A = matrix(c(0,0,0,0,
+              0,0,0,0,
+              0,0,0,0,
+              0,0,0,0),nrow=4,byrow=T)
+
+rownames(A) = c("GAL1", "GAL2", "GAL3", "GAL7")
+colnames(A) = c("GAL1", "GAL2", "GAL3", "GAL7")
+```
+
+```{r, echo = FALSE}
+DAGS = list()
+
+for (a in 1:3) {
+  i = 1; j = 2
+  
+  # reset the previous option we made for this pair
+  A[i,j] = 0
+  A[j,i] = 0
+  
+  if (a == 1) {
+    A[i,j] = 0
+    A[j,i] = 0
+  }
+  
+  if (a == 2) {
+    A[i,j] = 1
+  }
+  
+  if (a == 3) {
+    A[j,i] = 1
+  }
+  
+  # pair (GAL1, GAL3)
+  for (b in 1:3) {
+    i = 1; j = 3
+    
+    # reset the previous option we made for this pair
+    A[i,j] = 0
+    A[j,i] = 0
+    
+    if (b == 1) {
+      A[i,j] = 0
+      A[j,i] = 0
+    }
+    
+    if (b == 2) {
+      A[i,j] = 1
+    }
+    
+    if (b == 3) {
+      A[j,i] = 1
+    }
+    
+    # pair (GAL1, GAL7)
+    for (c in 1:3) {
+      i = 1; j = 4
+      
+      # reset the previous option we made for this pair
+      A[i,j] = 0
+      A[j,i] = 0    
+      
+      if (c == 1) {
+        A[i,j] = 0
+        A[j,i] = 0
+      }
+    
+      if (c == 2) {
+        A[i,j] = 1
+      }
+    
+      if (c == 3) {
+        A[j,i] = 1
+      }
+      
+      # pair (GAL2, GAL3)
+      for (d in 1:3) {
+        i = 2; j = 3
+        
+        # reset the previous option we made for this pair
+        A[i,j] = 0
+        A[j,i] = 0
+        
+        if (d == 1) {
+          A[i,j] = 0
+          A[j,i] = 0
+        }
+    
+        if (d == 2) {
+          A[i,j] = 1
+        }
+    
+        if (d == 3) {
+          A[j,i] = 1
+        }
+        
+        # pair (GAL2, GAL7)
+        for (e in 1:3) {
+          i = 2; j = 4
+          
+          # reset the previous option we made for this pair
+          A[i,j] = 0
+          A[j,i] = 0
+          
+          if (e == 1) {
+            A[i,j] = 0
+            A[j,i] = 0
+          }
+          
+          if (e == 2) {
+            A[i,j] = 1
+          }
+          
+          if (e == 3) {
+            A[j,i] = 1
+          }
+          
+          # pair (GAL3, GAL7)
+          for (f in 1:3) {
+            i = 3; j = 4
+            
+            # reset the previous option we made for this pair
+            A[i,j] = 0
+            A[j,i] = 0
+            
+            if (f == 1) {
+              A[i,j] = 0
+              A[j,i] = 0
+              
+              # add this matrix to our list if it is acyclic
+              if (is.acyclic(A)) {
+                DAGS[[length(DAGS) + 1]] = A
+              }
+            }
+            
+            if (f == 1) {
+              A[i,j] = 1
+              
+              # add this matrix to our list if it is acyclic
+              if (is.acyclic(A)) {
+                DAGS[[length(DAGS) + 1]] = A
+              }
+            }
+            
+            if (f == 3) {
+              A[j,i] = 1
+              
+              # add this matrix to our list if it is acyclic
+              if (is.acyclic(A)) {
+                DAGS[[length(DAGS) + 1]] = A
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+* There are 6 pairs of nodes and each loop represents one among these.
+* We modify i and j in each loop to represent the indices corresponding to those pair of nodes.
+* For each pair of nodes, there are 3 options: no edge and inserting an edge with either direction.
+
+```{r, echo = FALSE}
+# Function to calculate BIC:
+getBIC = function(A, names, df) {
+  # Takes an adjacency matrix and column/row names of the nodes and the data as parameters
+  # Calculating BIC of the graph by summing BIC for each node by treating each node as the child node:
+  dag = as(A, "graphNEL")
+  
+  bic = 0
+  
+  for (i in 1:length(names)) {
+    # Calculating BIC for i th node:
+    child = names[i]
+    parents = parents(child, dag)
+    
+    # if the child has parents, get BIC using linear regression:
+    if (length(parents) > 0) {
+      model = lm(gene[[child]] ~., data = df[c(child, parents)])
+      bic = bic + BIC(model)
+    }
+    # otherwise, get BIC using formula:
+    else {
+      N = length(df[,child])
+      bic_child = N*log(1/N*sum((df[,child]-mean(df[,child]))^2))
+      bic = bic + bic_child
+    }
+  }
+  
+  return(bic)
+}
+```
+
+```{r, echo = FALSE}
+# Creating an empty vector to store the BIC of each graph:
+BICs = vector(length = length(DAGS))
+
+gene_sub = gene[c("GAL1", "GAL2", "GAL3", "GAL7")]
+
+# Computing BIC for each DAG:
+for (i in 1:length(DAGS)) {
+  BICs[i] = getBIC(DAGS[[i]], rownames(A), gene_sub)
+  }
+```
+
+See code in R Markdown file.
+
+### b)
+```{r, echo = FALSE}
+# Sorting the vector of BICs:
+BICs.sorted = sort(BICs)
+
+# 10 Models with least BIC:
+BICs.sorted[1:10]
+```
+
+* There are 2 models with same BIC (-27452.71).
+* So, if we consider the three smallest BIC, we have 4 models.
+
+```{r, echo = FALSE}
+smallest = BICs.sorted[1:4]
+
+first_smallest.indices = which(BICs %in% smallest[1:1])
+second_smallest.indices = which(BICs %in% smallest[2:2])
+third_smallest.indices = which(BICs %in% smallest[3:4])
+```
+
+# DAG of the model with the smallest BIC:
+```{r, echo = FALSE}
+plot(as(DAGS[[first_smallest.indices[1]]], "graphNEL"))
+
+title(main = paste(c("BIC =", smallest[1], "(1st Smallest)"), collapse = " "))
+```
+
+# DAG of the model with the 2nd smallest BIC:
+```{r, echo = FALSE}
+plot(as(DAGS[[second_smallest.indices[1]]], "graphNEL"))
+
+title(main = paste(c("BIC =", smallest[2], "(2nd Smallest)"), collapse = " "))
+```
+
+# DAGs of the model(s) with the 3rd smallest BIC:
+```{r, echo = FALSE}
+par(mfrow = c(1,2))
+plot(as(DAGS[[third_smallest.indices[1]]], "graphNEL"))
+plot(as(DAGS[[third_smallest.indices[2]]], "graphNEL"))
+
+title(main = paste(c("BIC =", smallest[3], "(3rd Smallest)"), collapse = " "))
+```
+
+\newpage
+
+# 3)
+
+### a)
+
+```{r, echo = FALSE}
+# Creating a function which implements the step-wise algorithm for estimating the graph structure:
+
+# start with some initial graph and apply the 3 operations to it and choose the one with smallest BIC
+# now, start from the chosen graph and apply the 3 operations again and repeat until a smaller BIC is not obtained
+# returns a list containing adjacency matrix of this graph and its bic
+
+stepwise = function(df) {
+  # Takes a dataframe as input parameter:
+  
+  # Starting the algorithm with an intitial graph at each iteration
+  names = colnames(df)
+
+  # empty graph will be our initial graph for the algorithm
+  starting = matrix(0, length(names), length(names))
+  rownames(starting) = names
+  colnames(starting) = names
+  
+  min_bic = getBIC(starting, names, df)
+  
+  smaller_BIC_exists = TRUE
+  
+  while (smaller_BIC_exists) {
+    
+    # lists which store BICs and adjacency matrices for all graphs we created in this iteration:
+    bic_list = list()
+    graph_list = list()
+    
+    # REMOVING EDGES:
+    
+    # get indices where matrix has a 1 (this marks edges)
+    edge_indices = which(starting == 1, arr.ind = T)
+
+    # make sure the graph has edges we can remove
+    if (length(edge_indices) > 0) {
+      
+      # go through each point in matrix where we found a 1
+      for (i in 1:(length(edge_indices)/2)) {
+        # change the 1 to be a 0
+        temp = starting
+        temp[edge_indices[i,1], edge_indices[i,2]] = 0
+
+        # get BIC of this temp graph and store it (only if it is acyclic)
+        tempBIC = getBIC(temp, names, df)
+        bic_list = c(bic_list, tempBIC)
+        graph_list[[length(graph_list)+1]] = temp
+      }
+    }
+    
+    
+    # ADDING EDGES:
+      
+    # get indices where matrix has a 0 (this marks where there are no edges)
+    noedge_indices = which(starting == 0, arr.ind = T)
+    
+  
+    # make sure the graph has nodes with no edge
+    if (length(noedge_indices) > 0) {
+
+      # through each opint in matrix where we found a 0
+      for (i in 1:(length(noedge_indices)/2)) {
+        
+        # make sure this edge is not going to and coming from the same node
+        if(noedge_indices[i,1] != noedge_indices[i,2]) {
+          temp = starting
+          temp[noedge_indices[i,1], noedge_indices[i,2]] = 1
+
+          # get BIC of this temp graph and store it (only if it is still acyclic)
+          if (is.acyclic(temp)) {
+            tempBIC = getBIC(temp, names, df)
+            bic_list = c(bic_list, tempBIC)
+            graph_list[[length(graph_list)+1]] = temp
+          }
+        }
+      }
+    }
+    
+    
+    # REVERSING EDGES:
+    
+    # make sure the graph has edges we can reverse
+    if (length(edge_indices) > 0) {
+      
+      for (i in 1:(length(edge_indices)/2)) {
+        
+        temp = starting
+        temp[edge_indices[i,1], edge_indices[i,2]] = 0
+        temp[edge_indices[i,2], edge_indices[i,1]] = 1
+        
+        # get BIC of this temp graph and store it (only if it is still acyclic)
+        if (is.acyclic(temp)) {
+          tempBIC = getBIC(temp, names, df)
+          bic_list = c(bic_list, tempBIC)
+          graph_list[[length(graph_list)+1]] = temp
+        }
+      }
+    
+    }
+    
+    # SELECTING GRAPH FOR NEXT ITERATION:
+    
+    # store min BIC and index where min BIC occurs
+    this_min_bic = min(unlist(bic_list))
+    this_min_graph = which.min(unlist(bic_list))
+    
+    # if one of the graphs we generated in this iteration is less than our current min bic
+    # update the minimum bic and make the corresponding graph our new starting graph
+    if (this_min_bic < min_bic) {
+      min_bic = this_min_bic
+      starting = graph_list[[which.min(unlist(bic_list))]]
+    }
+    # we did not find a graph with a smaller BIC so stop the algorithm
+    else {
+      smaller_BIC_exists = FALSE
+    }
+  }
+  
+  graph_and_bic = list(starting, min_bic)
+    
+  return(graph_and_bic)
+}
+```
+
+See code in R Markdown file.
+
+### b)
+
+# Trying our program on gene.txt dataset:
+```{r, echo = FALSE}
+results = stepwise(gene)
+```
+
+```{r, echo = FALSE}
+stepwise_graph = results[[1]]
+stepwise_bic = results[[2]]
+```
+
+* With the empty graph as our initial graph, we get the following DAG and BIC using the stepwise algorithm:
+
+```{r, echo = FALSE}
+plot(as(stepwise_graph, "graphNEL"))
+
+title(main = paste(c("BIC =", results[2]), collapse = " "))
+```
+
+\newpage
+
+# 5)
+
+### a)
+
+```{r, echo = FALSE}
+# get the covariance matrix of gene data
+S = cov(gene)
+
+# list of rho values we will try
+rho_list = seq(0.1, 3, by = 0.2)
+```
+
+```{r, echo = FALSE}
+# store the adj. matrices of resulting graphs
+undirected_graphs = list()
+
+for (i in (1:length(rho_list))) {
+  # fit graphical lasso model
+  fit = glasso(S, rho = rho_list[i])
+  
+  # get inverse covariance matrix from model
+  theta = fit$wi
+  
+  # TRANSFORMAING covariance matrix to adjacency matrix to represent undirected graph
+  
+  # assigning names of genes
+  colnames(theta) = names(gene)
+  rownames(theta) = names(gene)
+  
+  # anywhere in the covariance matrix that is not 0, we set to TRUE (1)
+  # otherwise, set to FALSE (0)
+  adj = (theta != 0)
+  
+  # TRUE values become 1, FALSE values become 0 which represent the edges
+  adj = adj*1
+
+  # set diagonal to 0 so no node has an edge to itself
+  diag(adj) = 0
+  
+  undirected_graphs[[length(undirected_graphs)+1]] = adj
+}
+```
+
+```{r, echo = FALSE}
+par(mfrow = c(2,2))
+
+for (i in (1:4)) {
+  plot(as(undirected_graphs[[i]], "graphNEL"))
+  title(main = paste(c("Rho =", rho_list[i]), collapse = " "))
+}
+```
+
+```{r, echo = FALSE}
+par(mfrow = c(2,2))
+
+for (i in (5:8)) {
+  plot(as(undirected_graphs[[i]], "graphNEL"))
+  title(main = paste(c("Rho =", rho_list[i]), collapse = " "))
+}
+```
+
+
+```{r, echo = FALSE}
+par(mfrow = c(2,2))
+
+for (i in (9:12)) {
+  plot(as(undirected_graphs[[i]], "graphNEL"))
+  title(main = paste(c("Rho =", rho_list[i]), collapse = " "))
+}
+```
+
+```{r, echo = FALSE}
+par(mfrow = c(2,2))
+
+for (i in (13:length(undirected_graphs))) {
+  plot(as(undirected_graphs[[i]], "graphNEL"))
+  title(main = paste(c("Rho =", rho_list[i]), collapse = " "))
+}
+```
+
+* With a smaller value of rho, the graph is more connected. 
+* As rho increases, the graph loses its connections and becomes more and more disconnected. 
+* When rho > 2.9, the graph is completely disconnected and all of the features are independent.

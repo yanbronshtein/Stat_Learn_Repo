@@ -1,0 +1,470 @@
+---
+title: "Statistical Learning HW4"
+author: "Yaniv Bronshtein"
+date: "11/28/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Import the necessary libraries**
+```{r}
+library(gbm)
+library(tree)
+library(rpart)
+library(e1071)
+library(glmnet)
+library(ISLR)
+library(superml) #for grid search cv for Q2
+library(caret)
+```
+
+
+
+# Question 1
+1. Write a program to implement AdaBoost with trees (Algorithm 10.1). [Hint. The rpart() func- tion has a argument weights, which you need to supply for Step 2(a) of the algorithm. Also, use the control=rpart.control(maxdepth=1) so that a stump is added in each step.] Do the following using your program.
+
+
+**Create a function to compute e**
+```{r}
+compute_e <- function(w, y, y_pred){
+  return(sum(w*(y != y_pred)) / sum(w))
+}
+```
+
+**Create a function to compute alpha**
+```{r}
+compute_alpha <- function(e){
+  return(log((1-e)/e))
+}
+```
+
+
+**Create a function to update the weights**
+
+```{r}
+update_weights <- function(w, alpha, y, y_pred){
+  return(w*exp(alpha*(y != y_pred)))
+}
+```
+
+
+**Create a function to compute the test error**
+```{r}
+compute_test_errors <- function(y, output, n_rounds){
+  test_error <- NULL
+    for(i in 1:n_rounds){
+      test_error <- c(test_error, sum(y != output[i,]) / length(y))
+    }
+  return(test_error)
+}
+```
+
+**Ada-boost function**
+```{r}
+adaboost <- function(X_train, X_test, y_train, y_test, tree_depth, n_rounds){
+  #Define the weights. Start with uniform weights
+  w <- rep(1/nrow(X_train), nrow(X_train)) 
+  #This is used for prediction
+  classifier <- matrix(0, n_rounds, nrow(X_test))
+  #Convert X_train and X_test to dataframes
+  X_train <- data.frame(X_train)
+  X_test <- data.frame(X_test)
+  #Train 
+  alphas <- NULL
+  for(i in 1:n_rounds){
+    
+    tree <- rpart(y_train ~ ., data=X_train, weights=w, method='class',
+                  control=rpart.control(maxdepth=tree_depth))
+    
+    pred_train <- as.integer(as.character(predict(tree, X_train, type='class')))
+    classifier[i,] <- as.integer(as.character(predict(tree, X_test, type='class')))
+    
+    #compute_error() function
+    e <- compute_e(w=w, y=y_train, y_pred=pred_train)
+    
+    #compute_alpha() function
+    alpha <- compute_alpha(e)
+    alphas <- c(alphas, alpha)
+    
+    #update_weights() function
+    w <- update_weights(alpha=alpha,w, y=y_train, y_pred=pred_train)
+  }
+  
+  #Multiply predicted classifier by alpha.
+  for(i in 1:n_rounds){
+    classifier[i,] <- classifier[i,] * alphas[i]
+  }
+  
+  #take colsum for each. then take sign()
+  output <- ifelse(classifier[1,] < 0, -1, 1)
+  for(i in 2:n_rounds){
+    output <- rbind(output, ifelse(colSums(classifier[1:i,]) < 0, -1, 1))
+  }
+  
+  #get the test classification error
+  test_errors <- compute_test_errors(y=y_test, output=output, n_rounds=n_rounds)
+  
+  return(list('Predicted Class' = output, 'Test_Error' = test_errors))
+  
+}
+```
+
+
+
+**Simulate the data**
+```{r}
+set.seed(123)
+n.tr=2000; n.te=10000; p=10
+
+X.tr=matrix(rnorm(n.tr*p),nrow=n.tr)
+y=apply(X.tr^2,MAR=1,FUN="sum")
+y=y>=9.34
+y=as.factor(as.numeric(y))
+ex1.tr=data.frame(X.tr,y)
+
+X.te=matrix(rnorm(n.te*p),nrow=n.te)
+y=apply(X.te^2,MAR=1,FUN="sum")
+y=y>=9.34
+y=as.factor(as.numeric(y))
+ex1.te=data.frame(X.te,y)
+```
+
+**Create the trees**
+```{r}
+ex1.tree=tree(y~.,ex1.tr)
+ex1.tree.pred=predict(ex1.tree,ex1.te,type="class")
+test.error.tree=sum(ex1.tree.pred!=ex1.te$y)/n.te
+
+ex1.stump=prune.tree(ex1.tree,best=2,method="deviance")
+ex1.stump.pred=predict(ex1.stump,ex1.te,type="class")
+test.error.stump=sum(ex1.stump.pred!=ex1.te$y)/n.te
+```
+
+**Perform boosting**
+```{r}
+ex1.tr$y=as.numeric(ex1.tr$y)-1
+ex1.te$y=as.numeric(ex1.te$y)-1
+ntree=400
+ex1.boost=adaboost(X_train=as.matrix(ex1.tr[,1:p]), X_test=as.matrix(ex1.te[,1:p]),
+                   y_train=ifelse(ex1.tr$y==0, -1, 1), y_test=ifelse(ex1.te$y==0, -1, 1),
+                   tree_depth=1, n_rounds=ntree)
+
+
+```
+
+**Generate the adaboost plots**
+```{r}
+plot(1:ntree, ex1.boost$Test_Error, type="l", col="orange", xlab="Boosting Iterations", ylab="Test Error", ylim=c(0,0.5))
+abline(h=test.error.tree,lty=2,col="purple")
+abline(h=test.error.stump,lty=2,col="gray")
+legend("bottomleft", c("AdaBoost","Stump","21 Node Tree"),
+col=c("orange","gray","purple"), lty=c(1,2,2))
+```
+
+(b) Investigate the number of iterations needed to make the test error start to rise in the figure above.
+
+**Result of investigation led to choosing 1200 rounds**
+```{r}
+ex1.boost.model=adaboost(X_train=as.matrix(ex1.tr[,1:p]), X_test=as.matrix(ex1.te[,1:p]),
+                   y_train=ifelse(ex1.tr$y==0, -1, 1), y_test=ifelse(ex1.te$y==0, -1, 1),
+                   tree_depth=1, n_rounds=1200)
+
+plot(1:1200, ex1.boost.model$Test_Error, type="l", col="orange", xlab="Boosting Iterations", ylab="Test Error", ylim=c(0,0.5))
+```
+
+Part c).
+**Function to compute the error rate**
+```{r}
+error.rate=function(m,newdata,ntree){
+  err=array(0,c(3,ntree))
+  rownames(err)=c("Mis","Exp","Dev")
+  for (i in 1:ntree){
+    p=dim(newdata)[2]-1
+    pp=predict(m,newdata=newdata[,1:p], n.trees=i)
+    err[2,i]=mean(exp(-pp*(2*newdata$y-1)))
+    err[3,i]=mean(log(1+exp(-2*pp*(2*newdata$y-1))))
+    pp=pp>=0
+    pp=as.numeric(pp)
+    err[1,i]=mean(pp!=newdata$y)
+  }
+  err
+}
+```
+
+```{r}
+m1=gbm(y~.,data=ex1.tr,distribution="bernoulli",n.trees=ntree,
+interaction.depth=1, shrinkage=1, bag.fraction=1)
+m2=gbm(y~.,data=ex1.tr,distribution="bernoulli",n.trees=ntree,
+interaction.depth=9, shrinkage=1, bag.fraction=1)
+m3=gbm(y~.,data=ex1.tr,distribution="bernoulli",n.trees=ntree,
+interaction.depth=19, shrinkage=1, bag.fraction=1)
+err1=error.rate(m1,newdata=ex1.te,ntree=ntree)
+err2=error.rate(m2,newdata=ex1.te,ntree=ntree)
+err3=error.rate(m3,newdata=ex1.te,ntree=ntree)
+par(mar=c(4.5,4.5,.5,.4))
+plot(1:ntree, ex1.boost$Test_Error, type="l", col="orange", xlab="Boosting Iterations",
+ylab="Test Error" ,ylim=c(0,0.5))
+lines(1:ntree,err1[1,],type="l",col="purple")
+lines(1:ntree,err2[1,],type="l",col="gray")
+lines(1:ntree,err3[1,],type="l",col="blue")
+legend("topright", c("AdaBoost","Stump","10 Node", "20 Node"),
+col=c("orange","purple","gray","blue"), lty=rep(1,4))
+```
+
+
+# Question 2
+**Read in data**
+```{r}
+spam <- read.table('../data/spam.txt')
+spam_ind <- read.table('../data/spam_ind.txt')
+```
+
+**Perform 50-50 train test split**
+```{r}
+set.seed(123)
+
+train <- sample(1:nrow(spam), 0.5*nrow(spam))
+spam_train <- spam[train,]
+spam_test <- spam[-train,]
+spam_ind_train <- spam_ind[[1]][train]
+spam_ind_test <- spam_ind[[1]][-train]
+```
+
+
+
+
+**Helper function for tuning**
+```{r}
+get_test_err <- function(gbm_model, spam_test, spam_ind_test){
+  gbm_prob <- predict(gbm_model, spam_test, type='response') #get prediction probabilities
+  gbm_pred <- rep('0', nrow(spam_test)) #Default 0 classification
+  gbm_pred[gbm_prob > .5] <- '1' #Use 0.5 threshold to get 1 classification
+  
+  confusion_matrix <- table(gbm_pred, spam_ind_test) #Generate confusion matrix
+  err <- 1-(confusion_matrix[1]+confusion_matrix[4])/nrow(spam_test) #Get the test error
+  return(err) 
+}
+```
+
+**Experiment with various interaction depth values.**
+```{r}
+tune_interaction_depth <- function(){
+  test_error <- NULL
+  
+  for(i in 1:6){
+    set.seed(123)
+    
+    gbm_model <- gbm(formula=spam_ind_train ~ .,data=spam_train,interaction.depth=i)
+    
+    err <- get_test_err(gbm_model, spam_test, spam_ind_test)
+    test_error <- c(test_error, err)
+  }
+  return(test_error)
+}
+```
+
+
+**Plot the test Error for interaction depth**
+```{r ,message=FALSE}
+test_error <- tune_interaction_depth()
+
+plot(test_error, 
+     type='b', 
+     xaxt = 'n',
+     xlab='Depth Values',
+     main='Testing Interaction Depth', 
+     ylab='Test Error')
+axis(1, at=1:6, 1:6)
+```
+*We note from the above plot that the minimum test error happens at an interaction depth*
+*of 1. Thus we will continue using the default value of 1 during our testing of shrinkage*
+
+
+**Now let us test shrinkage**
+```{r}
+tune_shrinkage <- function(){
+  test_error <- NULL
+  for(i in 0:5){
+    set.seed(123)
+    gbm_model <- gbm(spam_ind_train ~ ., data=spam_train, shrinkage=0.1 - 0.02*i)
+    err <- get_test_err(gbm_model, spam_test, spam_ind_test)
+    test_error <- c(test_error, err)
+  }
+  return(test_error)
+}
+
+```
+
+
+**Get test errors and plot for varying shrinkage**
+```{r}
+test_error <- tune_shrinkage()
+plot(test_error, 
+     type='b', 
+     xaxt = 'n', 
+     xlab='Shrinkage value', 
+     ylab='Test Error',
+     main='Testing Shrinkage')
+axis(1, at=1:5, labels=c(0.1, 0.08, 0.04, 0.02, 0))
+
+
+```
+*Based on the graph of the test error, the best shrinkage should be 0 but I will use 0.02*  
+
+
+
+**Now let us test bag.fraction**
+```{r}
+tune_bag_fraction <- function(){
+  test_error <- NULL
+  for(i in 1:6){
+    set.seed(123)
+    gbm_model <- gbm(spam_ind_train ~ .,data=spam_train, shrinkage=0.02,bag.fraction=1-0.1*i)
+    err <- get_test_err(gbm_model, spam_test, spam_ind_test)
+    test_error <- c(test_error, err)
+  }
+  return(test_error)
+}
+
+```
+
+
+**Get test errors and plot for varying bag.fraction**
+```{r}
+test_error <- tune_bag_fraction()
+plot(test_error, 
+     type='b', 
+     xaxt = 'n', 
+     xlab='Bag fraction value', 
+     ylab='Test Error',
+     main='Testing Bag Fraction')
+axis(1, at=1:6, labels=c(0.9, 0.8, 0.7, 0.6, 0.5, 0.4))
+```
+
+**generate plot**
+```{r}
+plot(test_error, type='b', xaxt = 'n', xlab='Bag Fraction', ylab='Test Error')
+axis(1, at=1:5, labels=c(0.9, 0.8, 0.7, 0.6, 0.5))
+```
+
+*Based on the plot, I will set the bag.fraction to 0.9*
+
+**Now let us test the final parameter of n.trees**
+```{r}
+tune_ntrees <- function(){
+  test_error <- NULL
+  for(i in 0:3){
+    set.seed(123)
+    gbm_model <- gbm(spam_ind_train ~ .,
+                     data=spam_train, 
+                     shrinkage=0.02,
+                     bag.fraction=0.9,
+                     n.trees=100 + 300*i
+                     )
+    err <- get_test_err(gbm_model, spam_test, spam_ind_test)
+    test_error <- c(test_error, err)
+  }
+  return(test_error)
+}
+
+```
+
+
+```{r}
+test_error <- tune_ntrees()
+plot(test_error, 
+     type='b', 
+     xaxt = 'n', 
+     xlab='Values for Number of Iterations', 
+     ylab='Test Error',
+     main='Tuning Number of Iterations')
+axis(1, at=1:4, labels=c(100, 400, 700, 1000))
+```
+*Based on the results of the plot, I will stick to using 100 trees*
+
+**Let us fit the final optimal model**
+```{r, message=FALSE}
+set.seed(123)
+
+gbm_model_optimal <- gbm(spam_ind_train ~., 
+                 data=spam_train, 
+                 distribution='bernoulli',
+                 n.trees=100, 
+                 shrinkage=0.02, 
+                 interaction.depth=1, 
+                 bag.fraction=0.9)
+
+optimal_test_err <- get_test_err(gbm_model_optimal, spam_test, spam_ind_test)
+optimal_test_err
+```
+**Now let's try logistic regression**
+```{r}
+lr_model <- glm(spam_ind_train ~ ., data=spam_train, family='binomial')
+lr_test_err <- get_test_err(lr_model, spam_test, spam_ind_test)
+lr_test_err
+```
+
+
+**And now SVM**
+```{r}
+svm_model <- glm(spam_ind_train ~ ., data=spam_train, family='binomial')
+lr_test_err <- get_test_err(lr_model, spam_test, spam_ind_test) #can recycle helper from before
+lr_test_err
+```
+
+```{r}
+svm_model <- svm(spam_ind_train ~ ., 
+               data=spam_train, 
+               kernel='radial', 
+               probability=TRUE)
+svm_prob <- as.numeric(predict(svm_model, spam_test, probability=TRUE))
+svm_pred <- rep('0', nrow(spam_test))
+svm_prob[svm_prob > .5] <- '1'
+confusion_matrix <- table(svm_pred, spam_ind_test)
+
+svm_test_err <- 1-((confusion_matrix[1] + confusion_matrix[4])/nrow(spam_test))
+svm_test_err
+```
+# Question 3
+
+*Note:code similar to textbook*
+```{r}
+data(Caravan)
+
+tr <- Caravan[1:1000,]
+te <- Caravan[1001:nrow(Caravan),]
+
+gbm_model <- suppressWarnings(gbm(ifelse(tr$Purchase == 'No', 0, 1) ~ ., data=tr, 
+                                distribution='bernoulli', n.trees=1000, shrinkage=0.01))
+summary(gbm_model)
+```
+
+*Fitting gbm() with n.trees = 1000 shrinkage 0.01, we get predictors  appear to be most PPERSAUT, MKOOPKLA, MOPLHOOG, and MBERMIDD deemed most important*
+
+```{r, message=FALSE}
+gbm_prob <- predict(gbm_model, te, type='response')
+gbm_pred <- rep('No', nrow(Caravan)-1000)
+gbm_pred[gbm_prob > .2] <- 'Yes'
+```
+
+
+```{r}
+confusion_matrix <- table(gbm_pred, te$Purchase)
+confusion_matrix
+cat('Precision:', confusion_matrix[4]/(confusion_matrix[2] + confusion_matrix[4]))
+```
+
+*Fraction of people who made the purchase is around 20%*
+
+```{r}
+glm_model <- glm(tr$Purchase ~ ., data=tr, family=binomial)
+glm_prob <- predict(glm_model, te, type='response')
+glm_pred <- rep('No', nrow(Caravan)-1000)
+glm_pred[glm_prob > .2] <- 'Yes'
+confusion_matrix <- table(glm_pred, te$Purchase)
+cat('Precision:', confusion_matrix[4]/(confusion_matrix[2] + confusion_matrix[4]))
+```
+*Logistic Regression is not nearly as high as boosting. Around half as precise*

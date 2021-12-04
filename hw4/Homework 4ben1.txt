@@ -1,0 +1,61 @@
+library(gbm)
+library(ISLR)
+library(e1071)
+
+set.seed(1)
+data(Caravan)
+
+spam <- read.table('C:/Users/benja/Downloads/spam.txt')
+spam_id <- read.table('C:/Users/benja/Downloads/spam_ind.txt')
+
+bst_fit <- suppressWarnings(gbm(spam_id[[1]][1:1000] ~ ., data=spam[1:1000,], distribution='bernoulli',
+n.trees=100, shrinkage=0.1, interaction.depth=1, bag.fraction=0.5))
+bst_prb <- predict(bst_fit, spam[1001:nrow(spam),], type='response')
+bst_prd <- rep('0', nrow(spam)-1000); bst_prd[bst_prb > .5] <- '1'
+paste('Test Error:', 1 - (table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[1] + 
+table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[4])/(nrow(spam)-1000))
+
+bst_fit <- suppressWarnings(gbm(spam_id[[1]][1:1000] ~ ., data=spam[1:1000,], distribution='bernoulli',
+n.trees=500, shrinkage=0.01, interaction.depth=2, bag.fraction=0.25))
+bst_prb <- predict(bst_fit, spam[1001:nrow(spam),], type='response')
+bst_prd <- rep('0', nrow(spam)-1000); bst_prd[bst_prb > .5] <- '1'
+paste('Test Error:', 1 - (table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[1] + 
+table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[4])/(nrow(spam)-1000))
+
+bst_fit <- suppressWarnings(gbm(spam_id[[1]][1:1000] ~ ., data=spam[1:1000,], distribution='bernoulli',
+n.trees=1000, shrinkage=0.005, interaction.depth=4, bag.fraction=0.1))
+bst_prb <- predict(bst_fit, spam[1001:nrow(spam),], type='response')
+bst_prd <- rep('0', nrow(spam)-1000); bst_prd[bst_prb > .5] <- '1'
+paste('Test Error:', 1 - (table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[1] + 
+table(bst_prd, spam_id[[1]][1001:length(spam_id[[1]])])[4])/(nrow(spam)-1000))
+
+glm_fit <- glm(spam_id[[1]][1:1000] ~ ., data=spam[1:1000,], family='binomial')
+glm_prb <- suppressWarnings(predict(glm_fit, spam[1001:nrow(spam),], type='response'))
+glm_prd <- rep('0', nrow(spam)-1000); glm_prd[glm_prb > .5] <- '1'
+paste('Test Error:', 1 - (table(glm_prd, spam_id[[1]][1001:length(spam_id[[1]])])[1] + 
+table(glm_prd, spam_id[[1]][1001:length(spam_id[[1]])])[4])/(nrow(spam)-1000))
+
+svm_fit <- suppressWarnings(svm(spam_id[[1]][1:1000] ~ ., data=spam[1:1000,], probability=TRUE))
+svm_prb <- as.numeric(predict(svm_fit, spam[1001:nrow(spam),], probability=TRUE))
+svm_prd <- rep('0', nrow(spam)-1000); svm_prd[svm_prb > .5] <- '1'
+paste('Test Error:', 1 - (table(svm_prd, spam_id[[1]][1001:length(spam_id[[1]])])[1] + 
+table(svm_prd, spam_id[[1]][1001:length(spam_id[[1]])])[4])/(nrow(spam)-1000))
+
+tr <- Caravan[1:1000,]
+te <- Caravan[1001:nrow(Caravan),]
+
+bst_fit <- suppressWarnings(gbm(ifelse(tr$Purchase == 'No', 0, 1) ~ ., data=tr, distribution='bernoulli', n.trees=1000, shrinkage=0.01))
+summary(bst_fit)
+
+bst_prb <- predict(bst_fit, te, type='response')
+bst_prd <- rep('No', nrow(Caravan)-1000); bst_prd[bst_prb > .2] <- 'Yes'
+
+table(bst_prd, te$Purchase)
+paste('Precision:', table(bst_prd, te$Purchase)[4]/(table(bst_prd, te$Purchase)[2] + table(bst_prd, te$Purchase)[4]))
+
+glm_fit <- suppressWarnings(glm(tr$Purchase ~ ., data=tr, family=binomial))
+glm_prb <- suppressWarnings(predict(glm_fit, te, type='response'))
+glm_prd <- rep('No', nrow(Caravan)-1000); glm_prd[glm_prb > .2] <- 'Yes'
+
+table(glm_prd, te$Purchase)
+paste('Precision:', table(glm_prd, te$Purchase)[4]/(table(glm_prd, te$Purchase)[2] + table(glm_prd, te$Purchase)[4]))
