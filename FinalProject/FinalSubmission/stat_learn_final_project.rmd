@@ -1,0 +1,244 @@
+library(MASS)
+library(ROCR)
+library(tree)
+library(class)
+library(e1071)
+library(randomForest)
+library(glmnet)
+library(gbm)
+library(rpart)
+library(gam)
+library(ggplot2)
+
+cancer <- read.csv('C:/Users/benja/Downloads/breast-cancer.csv')
+cancer <- cancer[,-c(1,33)]
+
+set.seed(1)
+train <- sample(1:nrow(cancer), 0.5*nrow(cancer))
+data_train <- cancer[train,]; data_test <- cancer[-train,]
+
+diagnosis_train <- cancer$diagnosis[train]
+diagnosis_test <- cancer$diagnosis[-train]
+
+pca_train <- prcomp(data_train[,-1], scale=TRUE, rank=7)
+
+var_explained <- pca_train$sdev^2 /sum(pca_train$sdev^2)
+cum_var_explained <- NULL
+for(i in seq(length(var_explained))){
+	cum_var_explained <- c(cum_var_explained, sum(var_explained[1:i]))
+	}
+
+plot(c(1:30), cum_var_explained, type='b', xlab='Number of PCA Components', ylab='Variance Explained')
+
+pca_test <- data.frame(predict(pca_train, data_test[,-1]))
+
+glm_fit <- suppressWarnings(glm(as.factor(diagnosis_train) ~., data=pca_train, family=binomial))
+glm_prb <- predict(glm_fit, pca_test, type="response")
+	
+roc_prd <- prediction(glm_prb, diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .2] <- "M"
+table(glm_prd, diagnosis_test)
+
+(table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .5] <- "M"
+table(glm_prd, diagnosis_test)
+
+(table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .8] <- "M"
+table(glm_prd, diagnosis_test)
+
+(table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+
+lda_fit <- lda(as.factor(diagnosis_train) ~., data=pca_train)
+lda_prb <- predict(lda_fit, pca_test, type="response")
+	
+roc_prd <- prediction(lda_prb$posterior[,2], diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .2] <- "M"
+table(lda_prd, diagnosis_test)
+
+(table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .5] <- "M"
+table(lda_prd, diagnosis_test)
+
+(table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .8] <- "M"
+table(lda_prd, diagnosis_test)
+
+(table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+
+qda_fit <- qda(as.factor(diagnosis_train) ~., data=pca_train)
+qda_prb <- predict(qda_fit, pca_test, type="response")
+	
+roc_prd <- prediction(qda_prb$posterior[,2], diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .2] <- "M"
+table(qda_prd, diagnosis_test)
+
+(table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .5] <- "M"
+table(qda_prd, diagnosis_test)
+
+(table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .8] <- "M"
+table(qda_prd, diagnosis_test)
+
+(table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+
+gam_fit <- gam(as.factor(diagnosis_train) ~., data=pca_train, family=binomial)
+gam_prb <- predict(gam_fit, pca_test, type="response")
+
+roc_prd <- prediction(gam_prb, diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .2] <- "M"
+table(gam_prd, diagnosis_test)
+
+(table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .5] <- "M"
+table(gam_prd, diagnosis_test)
+
+(table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .8] <- "M"
+table(gam_prd, diagnosis_test)
+
+(table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+
+rnf_fit <- randomForest(as.factor(diagnosis_train) ~., data=pca_train)
+rnf_prb <- predict(rnf_fit, pca_test, type="prob")
+
+roc_prd <- prediction(rnf_prb[,2], diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .2] <- "M"
+table(rnf_prd, diagnosis_test)
+
+(table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .5] <- "M"
+table(rnf_prd, diagnosis_test)
+
+(table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .8] <- "M"
+table(rnf_prd, diagnosis_test)
+
+(table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+
+bst_fit <- gbm(ifelse(diagnosis_train == 'B', 0, 1) ~., data=pca_train, distribution="bernoulli", n.trees=5000, interaction.depth=4)
+bst_prb <- predict(bst_fit, pca_test, type="response")
+
+roc_prd <- prediction(bst_prb, diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .2] <- "M"
+table(bst_prd, diagnosis_test)
+
+(table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .5] <- "M"
+table(bst_prd, diagnosis_test)
+
+(table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .8] <- "M"
+table(bst_prd, diagnosis_test)
+
+(table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+
+get_tuning <- tune(svm, diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_train)), kernel='linear')
+
+svm_linear <- svm(diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_train)),
+kernel='linear', cost=get_tuning$best.performance, probability=TRUE)
+
+svm_prb <- predict(svm_linear, pca_test, probability=TRUE)
+svm_prb <- attr(svm_prb, 'probabilities')[,2]
+
+roc_prd <- prediction(svm_prb, diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .2] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .5] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .8] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+get_tuning <- tune(svm, diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_train)), kernel='radial')
+
+svm_radial <- svm(diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_train)),
+kernel='radial', cost=get_tuning$best.performance, probability=TRUE)
+
+svm_prb <- predict(svm_radial, pca_test, probability=TRUE)
+svm_prb <- attr(svm_prb, 'probabilities')[,2]
+
+roc_prd <- prediction(svm_prb, diagnosis_test)
+roc_prf <- performance(roc_prd,"tpr","fpr")
+
+plot(roc_prf, colorize=TRUE)
+as.numeric((performance(roc_prd,"auc"))@y.values)
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .2] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .5] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .8] <- "M"
+table(svm_prd, diagnosis_test)
+
+(table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+
+ggplot(cancer, aes(x=perimeter_mean, fill=diagnosis)) + geom_density(size=1, alpha=.5) + 
+labs(x='Average Perimeter', y='Density') + scale_fill_manual(values=c("#11D164","#F8766D"))
+
+ggplot(cancer, aes(x=smoothness_mean, y=compactness_mean, color=diagnosis)) + geom_point() + 
+labs(x='Average Smoothness', y='Average Compactness') + scale_color_manual(values=c("#11D164","#F8766D"))
+
+ggplot(cancer, aes(x=concave.points_mean, y=concavity_mean, color=diagnosis)) + geom_point() +
+labs(x='Average Number of Concave Points', y='Average Concavity') + scale_color_manual(values=c("#11D164","#F8766D"))

@@ -1,0 +1,668 @@
+---
+title: "Statistical Learning Final Project"
+author: "Yaniv Bronshtein, Benjamin Barnett, Krishna Piratla"
+date: "11/19/2021"
+output:
+  pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Import the necessary libraries**
+```{r}
+library(MASS)
+library(ROCR)
+library(tree)
+library(class)
+library(e1071)
+library(randomForest)
+library(glmnet)
+library(gbm)
+library(rpart)
+library(gam)
+library(tidyverse)
+library(Matrix)
+library(ggplot2)
+```
+
+
+**Import the dataset**
+```{r}
+cancer <- read.csv('breast-cancer.csv')
+cancer <- cancer[,-c(1,33)]
+
+```
+
+
+**Create train and test sets for PCA and diagnosis**
+```{r}
+set.seed(1)
+train <- sample(1:nrow(cancer), 0.5*nrow(cancer))
+data_train <- cancer[train,]; data_test <- cancer[-train,]
+
+diagnosis_train <- cancer$diagnosis[train]
+diagnosis_test <- cancer$diagnosis[-train]
+
+
+results <- prcomp(data_train[,-1], scale=TRUE)
+
+
+```
+
+**Determine the variance explained by PCA**
+```{r}
+var_explain <- results$sdev^2 / sum(results$sdev^2)
+cum_var_explain <- NULL
+for(i in seq(length(var_explain))){
+	cum_var_explain <- c(cum_var_explain, sum(var_explain[1:i]))
+}
+
+plot(c(1:30), cum_var_explain, type='b', xlab='Number of PCA Components', ylab='Variance Explained')
+```
+
+**Create pca test based on results from cummulative variance explained**
+```{r}
+pca_tr_data <- data.frame(results$x)
+pca_te_data <- data.frame(predict(results, data_test[,-1]))
+```
+
+
+
+**Fit a logistic regression model and generate the roc_curve for it**
+```{r}
+glm_fit <- suppressWarnings(glm(as.factor(diagnosis_train) ~., data=pca_tr_data, family=binomial))
+glm_prb <- predict(glm_fit, pca_te_data, type="response")
+	
+roc_prd1 <- prediction(glm_prb, diagnosis_test)
+roc_prf1 <- performance(roc_prd1,"tpr","fpr")
+```
+
+
+**Plot Logistic Regression roc curve**
+```{r}
+plot(roc_prf1, colorize=TRUE, main="Logistic Regression ROC Curve")
+```
+**Get the AUC value for our ROC curve**
+```{r}
+auc1 <- as.numeric((performance(roc_prd1,"auc"))@y.values)
+auc1
+```
+
+**Generate the confusion matrix and compute the accuracy for logistic regression for a 0.2 threshold**
+```{r}
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .2] <- "M"
+c1_20 <- table(glm_prd, diagnosis_test)
+a1_20 <- (table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+c1_20
+a1_20
+```
+
+**Generate the confusion matrix and compute the accuracy for logistic regression for a 0.5 threshold**
+```{r}
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .5] <- "M"
+c1_50 <- table(glm_prd, diagnosis_test)
+a1_50 <- (table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+c1_50
+a1_50
+
+```
+
+**Generate the confusion matrix and compute the accuracy for logistic regression for a 0.8 threshold**
+```{r}
+glm_prd <- rep("B", 285); glm_prd[glm_prb > .8] <- "M"
+c1_80 <- table(glm_prd, diagnosis_test)
+a1_80 <- (table(glm_prd, diagnosis_test)[1] + table(glm_prd, diagnosis_test)[4])/285
+c1_80
+a1_80
+```
+
+
+**Perform Linear Discriminant analysis**
+```{r}
+lda_fit <- lda(as.factor(diagnosis_train) ~., data=pca_tr_data)
+lda_prb <- predict(lda_fit, pca_te_data, type="response")
+```
+
+**Generate the roc_curve and predictions for the lda model**
+```{r}
+roc_prd2 <- prediction(lda_prb$posterior[,2], diagnosis_test)
+roc_prf2 <- performance(roc_prd2,"tpr","fpr")
+```
+
+**Plot the roc_curve for lda**
+```{r}
+plot(roc_prf2, colorize=TRUE, main="LDA ROC Curve")
+
+```
+**Get the Area under curve value from the roc_curve for lda**
+```{r}
+auc2 <- as.numeric((performance(roc_prd2,"auc"))@y.values)
+auc2
+```
+
+**Generate the confusion matrix and compute the accuracy for LDA for a 0.2 threshold**
+```{r}
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .2] <- "M"
+c2_20 <- table(lda_prd, diagnosis_test)
+a2_20 <- (table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+c2_20
+a2_20
+```
+
+**Generate the confusion matrix and compute the accuracy for LDA for a 0.5 threshold**
+```{r}
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .5] <- "M"
+c2_50 <- table(lda_prd, diagnosis_test)
+a2_50 <- (table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+c2_50
+a2_50
+```
+
+**Generate the confusion matrix and compute the accuracy for LDA for a 0.8 threshold**
+```{r}
+lda_prd <- rep("B", 285); lda_prd[lda_prb$posterior[,2] > .8] <- "M"
+c2_80 <- table(lda_prd, diagnosis_test)
+a2_80 <- (table(lda_prd, diagnosis_test)[1] + table(lda_prd, diagnosis_test)[4])/285
+c2_80
+a2_80
+```
+
+
+**Perform Quadratic Discriminant analysis**
+```{r}
+qda_fit <- qda(as.factor(diagnosis_train) ~., data=pca_tr_data)
+qda_prb <- predict(qda_fit, pca_te_data, type="response")
+```
+
+**Generate the roc_curve and predictions for the qda model**
+```{r}
+roc_prd3 <- prediction(qda_prb$posterior[,2], diagnosis_test)
+roc_prf3 <- performance(roc_prd3,"tpr","fpr")
+```
+
+**Plot the roc_curve for qda**
+```{r}
+plot(roc_prf3, colorize=TRUE, main="QDA ROC Curve")
+
+```
+
+**Get the AUC value for the roc_curve for qda**
+```{r}
+auc3 <- as.numeric((performance(roc_prd3,"auc"))@y.values)
+```
+
+**Generate the confusion matrix and compute the accuracy for QDA for a 0.2 threshold**
+```{r}
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .2] <- "M"
+c3_20 <- table(qda_prd, diagnosis_test)
+a3_20 <- (table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+c3_20
+a3_20
+```
+
+**Generate the confusion matrix and compute the accuracy for QDA for a 0.5 threshold**
+```{r}
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .5] <- "M"
+c3_50 <- table(qda_prd, diagnosis_test)
+a3_50 <- (table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+a3_50
+a3_50
+```
+
+
+**Generate the confusion matrix and compute the accuracy for QDA for a 0.8 threshold**
+```{r}
+qda_prd <- rep("B", 285); qda_prd[qda_prb$posterior[,2] > .8] <- "M"
+c3_80 <- table(qda_prd, diagnosis_test)
+a3_80 <- (table(qda_prd, diagnosis_test)[1] + table(qda_prd, diagnosis_test)[4])/285
+c3_80
+a3_80
+```
+
+**Train a general additive model and generate predictions**
+```{r}
+gam_fit <- gam(as.factor(diagnosis_train) ~., data=pca_tr_data, family=binomial)
+gam_prb <- predict(gam_fit, pca_te_data, type="response")
+```
+
+**Generate the roc_curve and predictions for the GAM**
+```{r}
+roc_prd4 <- prediction(gam_prb, diagnosis_test)
+roc_prf4 <- performance(roc_prd4,"tpr","fpr")
+```
+
+**Plot the ROC curve for the GAM**
+```{r}
+plot(roc_prf4, colorize=TRUE, main="GAM ROC Curve")
+
+
+```
+
+**Get the AUC value for the GAM**
+```{r}
+auc4 <- as.numeric((performance(roc_prd4,"auc"))@y.values)
+```
+
+**Generate the confusion matrix and compute the accuracy for GAM for a 0.2 threshold**
+```{r}
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .2] <- "M"
+c4_20 <- table(gam_prd, diagnosis_test)
+a4_20 <- (table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+c4_20
+a4_20
+```
+
+**Generate the confusion matrix and compute the accuracy for GAM for a 0.5 threshold**
+```{r}
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .5] <- "M"
+c4_50 <- table(gam_prd, diagnosis_test)
+a4_50 <- (table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+c4_50
+a4_50
+```
+
+**Generate the confusion matrix and compute the accuracy for GAM for a 0.8 threshold**
+```{r}
+gam_prd <- rep("B", 285); gam_prd[gam_prb > .8] <- "M"
+c4_80 <- table(gam_prd, diagnosis_test)
+a4_80 <- (table(gam_prd, diagnosis_test)[1] + table(gam_prd, diagnosis_test)[4])/285
+c4_80
+a4_80
+```
+
+
+**Train a Random Forest Model and generate predictions**
+```{r}
+rnf_fit <- randomForest(as.factor(diagnosis_train) ~., data=pca_tr_data, ntree=500, mtry=2)
+rnf_prb <- predict(rnf_fit, pca_te_data, type="prob")
+```
+
+**Generate the ROC curve for Random Forest**
+```{r}
+roc_prd5 <- prediction(rnf_prb[,2], diagnosis_test)
+roc_prf5 <- performance(roc_prd5,"tpr","fpr")
+```
+
+**Plot the ROC Curve for Random Forest** 
+```{r}
+plot(roc_prf5, colorize=TRUE, main="Random Forest ROC Curve")
+```
+
+**Get the AUC value for Random Forest**
+```{r}
+auc5 <- as.numeric((performance(roc_prd5,"auc"))@y.values)
+```
+
+**Generate the confusion matrix and compute the accuracy for Random Forest for a 0.2 threshold**
+```{r}
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .2] <- "M"
+c5_20 <- table(rnf_prd, diagnosis_test)
+a5_20 <- (table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+c5_20
+a5_20
+```
+
+**Generate the confusion matrix and compute the accuracy for Random Forest for a 0.5 threshold**
+```{r}
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .5] <- "M"
+c5_50 <- table(rnf_prd, diagnosis_test)
+a5_50 <- (table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+c5_50
+a5_50
+```
+**Generate the confusion matrix and compute the accuracy for Random Forest for a 0.8 threshold**
+```{r}
+rnf_prd <- rep("B", 285); rnf_prd[rnf_prb[,2] > .8] <- "M"
+c5_80 <- table(rnf_prd, diagnosis_test)
+a5_80 <- (table(rnf_prd, diagnosis_test)[1] + table(rnf_prd, diagnosis_test)[4])/285
+c5_80
+a5_80
+```
+
+**Train a Generalized Boosted Regression Model and generate predictions**
+```{r}
+bst_fit <- gbm(ifelse(diagnosis_train == 'B', 0, 1) ~., data=pca_tr_data, distribution="bernoulli", n.trees=500, interaction.depth=4)
+bst_prb <- predict(bst_fit, pca_te_data, type="response")
+```
+
+**Generate the ROC curve for Generalized Boosted Regression Model Model**
+```{r}
+roc_prd6 <- prediction(bst_prb, diagnosis_test)
+roc_prf6 <- performance(roc_prd6,"tpr","fpr")
+```
+
+**Plot the ROC curve for Generalized Boosted Regression Model Model**
+```{r}
+plot(roc_prf6, colorize=TRUE, main="Generalized Boosted Regression Model ROC Curve")
+```
+**Extract the AUC value for the Generalized Boosted Regression Model Model**
+```{r}
+auc6 <- as.numeric((performance(roc_prd6,"auc"))@y.values)
+```
+**Generate the confusion matrix and compute the accuracy for Generalized Boosted Regression Model for a 0.2 threshold**
+```{r}
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .2] <- "M"
+c6_20 <- table(bst_prd, diagnosis_test)
+a6_20 <- (table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+c6_20
+a6_20
+```
+
+**Generate the confusion matrix and compute the accuracy for Generalized Boosted Regression Model for a 0.5 threshold**
+```{r}
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .5] <- "M"
+c6_50 <- table(bst_prd, diagnosis_test)
+a6_50 <- (table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+c6_50
+a6_50
+```
+
+**Generate the confusion matrix and compute the accuracy for Generalized Boosted Regression Model for a 0.8 threshold**
+```{r}
+bst_prd <- rep("B", 285); bst_prd[bst_prb > .8] <- "M"
+c6_80 <- table(bst_prd, diagnosis_test)
+a6_80 <- (table(bst_prd, diagnosis_test)[1] + table(bst_prd, diagnosis_test)[4])/285
+c6_80
+a6_80
+```
+
+**Perform tuning before running the Linear Support Vector Machine algorithm**
+```{r}
+get_tuning <- tune(svm, diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_tr_data)), kernel='linear')
+```
+
+**Train Linear Support Vector Machine Model**
+```{r}
+svm_linear <- svm(diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_tr_data)),
+kernel='linear', cost=get_tuning$best.performance, probability=TRUE)
+```
+
+
+**Generate the Linear SVM predictions**
+```{r}
+svm_prb <- predict(svm_linear, pca_te_data, probability=TRUE)
+svm_prb <- attr(svm_prb, 'probabilities')[,2]
+```
+
+**Generate the roc curve for Linear SVM**
+```{r}
+roc_prd7 <- prediction(svm_prb, diagnosis_test)
+roc_prf7 <- performance(roc_prd7,"tpr","fpr")
+```
+
+**Plot the ROC Curve for Linear SVM**
+```{r}
+plot(roc_prf7, colorize=TRUE, main="Linear SVM ROC Curve")
+```
+
+**Extract the AUC value for the Linear SVM model**
+```{r}
+auc7 <- as.numeric((performance(roc_prd7,"auc"))@y.values)
+```
+
+**Generate the confusion matrix and compute the accuracy for Linear SVM for a 0.2 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .2] <- "M"
+c7_20 <- table(svm_prd, diagnosis_test)
+a7_20 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c7_20
+a7_20
+```
+
+**Generate the confusion matrix and compute the accuracy for Linear SVM for a 0.5 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .5] <- "M"
+c7_50 <- table(svm_prd, diagnosis_test)
+a7_50 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c7_50
+a7_50
+```
+
+**Generate the confusion matrix and compute the accuracy for Linear SVM for a 0.8 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .8] <- "M"
+c7_80 <- table(svm_prd, diagnosis_test)
+a7_80 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c7_80
+a7_80
+```
+
+**Perform tuning before running the Radial Support Vector Machine algorithm**
+```{r}
+get_tuning <- tune(svm, diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_tr_data)), kernel='radial')
+```
+
+**Train Radial Support Vector Machine Model**
+```{r}
+svm_radial <- svm(diagnosis ~ ., data=data.frame(cbind(diagnosis = as.factor(diagnosis_train), pca_tr_data)),
+kernel='radial', cost=get_tuning$best.performance, probability=TRUE)
+```
+
+**Generate the Radial SVM predictions**
+```{r}
+svm_prb <- predict(svm_radial, pca_te_data, probability=TRUE)
+svm_prb <- attr(svm_prb, 'probabilities')[,2]
+```
+
+**Generate the roc curve for Radial SVM**
+```{r}
+roc_prd8 <- prediction(svm_prb, diagnosis_test)
+roc_prf8 <- performance(roc_prd8,"tpr","fpr")
+plot(roc_prf8, colorize=TRUE, main="Radial SVM ROC Curve")
+
+```
+
+**Extract the AUC value for the Radial SVM model**
+```{r}
+auc8 <- as.numeric((performance(roc_prd8,"auc"))@y.values)
+```
+
+**Generate the confusion matrix and compute the accuracy for Radial SVM for a 0.2 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .2] <- "M"
+c8_20 <- table(svm_prd, diagnosis_test)
+a8_20 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c8_20
+a8_20
+```
+
+**Generate the confusion matrix and compute the accuracy for Radial SVM for a 0.5 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .5] <- "M"
+c8_50 <- table(svm_prd, diagnosis_test)
+a8_50 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c8_50
+a8_50
+```
+
+**Generate the confusion matrix and compute the accuracy for Radial SVM for a 0.8 threshold**
+```{r}
+svm_prd <- rep("B", 285); svm_prd[svm_prb > .8] <- "M"
+c8_80 <- table(svm_prd, diagnosis_test)
+a8_80 <- (table(svm_prd, diagnosis_test)[1] + table(svm_prd, diagnosis_test)[4])/285
+c8_80
+a8_80
+```
+
+
+**Plot of all ROC curves**
+```{r}
+# par(mfrow=c(1,2))
+plot(roc_prf1, colorize=TRUE, main="Logistic Regression")
+plot(roc_prf4, colorize=TRUE, main="GAM")
+# par(mfrow=c(1,2))
+plot(roc_prf2, colorize=TRUE, main="LDA")
+plot(roc_prf3, colorize=TRUE, main="QDA")
+# par(mfrow=c(1,2))
+plot(roc_prf5, colorize=TRUE, main="Random Forest")
+plot(roc_prf6, colorize=TRUE, main="Generalized Boosted Regression")
+# par(mfrow=c(1,2))
+plot(roc_prf7, colorize=TRUE, main="Linear SVM")
+plot(roc_prf8, colorize=TRUE, main="Radial SVM")
+```
+
+
+
+**Function floor plotting confusion matrices**
+```{r}
+plot_confusion_accuracy <- function(a,c){
+  cat("Threshold: 0.2 |",'Accuracy:',a[1],'\n\n')
+  c[1]
+  cat("\n***********************************\n")
+  
+  cat("Threshold: 0.5 |",'Accuracy:',a[2],'\n\n')
+  c[2]
+  cat("\n***********************************\n")
+  cat("Threshold: 0.8 |",'Accuracy:',a[3],'\n\n')
+  c[3]
+  
+}
+
+
+```
+**Plotting all confusion matrices**
+
+
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a1_20,'\n\n')
+c1_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a1_50,'\n\n')
+c1_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a1_80,'\n\n')
+c1_80
+```
+
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a2_20,'\n\n')
+c2_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a2_50,'\n\n')
+c2_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a2_80,'\n\n')
+c2_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a3_20,'\n\n')
+c3_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a3_50,'\n\n')
+c3_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a3_80,'\n\n')
+c3_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a4_20,'\n\n')
+c4_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a4_50,'\n\n')
+c4_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a4_80,'\n\n')
+c4_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a5_20,'\n\n')
+c5_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a5_50,'\n\n')
+c5_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a5_80,'\n\n')
+c5_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a6_20,'\n\n')
+c6_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a6_50,'\n\n')
+c6_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a6_80,'\n\n')
+c6_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a7_20,'\n\n')
+c7_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a7_50,'\n\n')
+c7_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a7_80,'\n\n')
+c7_80
+```
+
+
+```{r echo=FALSE}
+cat("Threshold: 0.2 |",'Accuracy:',a8_20,'\n\n')
+c8_20
+cat("\n***********************************\n")
+
+cat("Threshold: 0.5 |",'Accuracy:',a8_50,'\n\n')
+c8_50
+cat("\n***********************************\n")
+cat("Threshold: 0.8 |",'Accuracy:',a8_80,'\n\n')
+c8_80
+```
+
+
+**AUC**
+```{r}
+auc1
+auc4
+
+auc2
+auc3
+
+
+auc5
+auc6
+
+auc7
+auc8
+
+
+```
+
+# EDA
+
+```{r}
+ggplot(cancer, aes(x=perimeter_mean, fill=diagnosis)) + geom_density(size=1, alpha=.5) + 
+labs(x='Average Perimeter', y='Density') + scale_fill_manual(values=c("#11D164","#F8766D"))
+```
+
+```{r}
+ggplot(cancer, aes(x=smoothness_mean, y=compactness_mean, color=diagnosis)) + geom_point() + 
+labs(x='Average Smoothness', y='Average Compactness') + scale_color_manual(values=c("#11D164","#F8766D"))
+```
+
+```{r}
+ggplot(cancer, aes(x=concave.points_mean, y=concavity_mean, color=diagnosis)) + geom_point() +
+labs(x='Average Number of Concave Points', y='Average Concavity') + scale_color_manual(values=c("#11D164","#F8766D"))
+```
